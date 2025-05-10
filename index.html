@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="de" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campus Dual → iCal Exporter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:'class'}</script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>html{font-family:'Inter',system-ui,sans-serif}</style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-sky-50 dark:from-gray-900 dark:to-gray-800 text-gray-700 dark:text-gray-200 min-h-screen flex flex-col">
+  <!-- Hero ------------------------------------------------------------------>
+  <header class="relative isolate overflow-hidden">
+    <svg class="pointer-events-none absolute inset-y-0 h-full w-full stroke-indigo-200/40 dark:stroke-indigo-600/20 [mask-image:radial-gradient(100%_100%_at_top_right,white,transparent)]" aria-hidden="true"><defs><pattern id="grid" width="80" height="80" x="50%" y="-1" patternUnits="userSpaceOnUse"><path d="M80 0V80M0 .5H80" fill="none"></path></pattern></defs><rect width="100%" height="100%" fill="url(#grid)"></rect></svg>
+    <div class="mx-auto max-w-4xl px-6 pt-20 pb-16 text-center lg:pt-32">
+      <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-6xl">
+        Campus Dual&nbsp;<span class="text-indigo-600 dark:text-indigo-400">→</span>&nbsp;iCal&nbsp;Exporter
+      </h1>
+      <p class="mt-6 text-lg leading-8 max-w-2xl mx-auto">
+        Exportiere deinen Stundenplan als <code class="px-1 py-0.5 bg-indigo-100/70 dark:bg-indigo-700/30 rounded">.ics</code> oder abonniere ihn direkt in deinem Kalender.
+      </p>
+      <div class="mt-8 flex justify-center gap-6">
+        <a href="#tool" class="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:bg-indigo-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">Los geht's</a>
+        <button id="themeToggle" class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400" aria-label="Theme Toggle"><svg id="themeIcon" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"></svg> Theme</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main ------------------------------------------------------------------>
+  <main id="tool" class="w-full flex-grow">
+    <div class="mx-auto max-w-6xl px-6 py-16">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Einmaliger Export -->
+        <section>
+          <div class="rounded-3xl border border-indigo-100 dark:border-indigo-900/40 bg-white/70 dark:bg-gray-900/60 backdrop-blur shadow-xl p-8 h-full">
+            <h2 class="text-2xl font-semibold mb-6 text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+              <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2Z"/></svg>
+              Einmaliger Export
+            </h2>
+            <form id="form" class="space-y-5">
+              <div>
+                <label for="userid" class="block text-sm font-medium">Matrikelnummer (<code>userid</code>)</label>
+                <input id="userid" type="number" required class="mt-2 w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white/90 dark:bg-gray-800/70 px-3 py-2 focus:ring-2 focus:ring-indigo-500" placeholder="3005182"/>
+              </div>
+              <div>
+                <label for="hash" class="block text-sm font-medium">Hash</label>
+                <input id="hash" required class="mt-2 w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white/90 dark:bg-gray-800/70 px-3 py-2 focus:ring-2 focus:ring-indigo-500" placeholder="12fca58f9d8f9f649269060c9aa51412"/>
+              </div>
+              <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582c.47 0 .848.378.848.848v8.456c0 .47.378.848.848.848h11.444a.848.848 0 0 0 .848-.848V9.848a.848.848 0 0 1 .848-.848H20V4H4Z"/></svg>
+                iCal herunterladen
+              </button>
+              <p id="result" class="hidden text-sm text-green-600">✓ Fertig – die Datei wurde heruntergeladen.</p>
+              <p id="error" class="hidden text-sm text-red-500"></p>
+            </form>
+          </div>
+        </section>
+
+        <!-- Abo-Feed -->
+        <section>
+          <div class="rounded-3xl border border-indigo-100 dark:border-indigo-900/40 bg-white/70 dark:bg-gray-900/60 backdrop-blur shadow-xl p-8 h-full">
+            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+              <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 17v5m0 0v-5m0 5h8M8 17v5m0 0v-5m0 5H0"/></svg>
+              Dauer‑Feed abonnieren
+            </h2>
+            <p class="mb-4">Du kannst deinen Plan jederzeit live in deinem Kalender abonnieren. Nutze dafür diese URL (Platzhalter <span class="font-mono">userid</span>/<span class="font-mono">hash</span> ersetzen):</p>
+            <div>
+              <div class="overflow-x-auto rounded-xl bg-gray-900">
+                <pre class="select-all text-gray-50 p-4 text-xs leading-relaxed whitespace-nowrap">https://cdual-ics.xnycrofox.workers.dev/ical?u=<span class="text-sky-400">userid</span>&amp;h=<span class="text-sky-400">hash</span></pre>
+              </div>
+              <button id="copyButton" class="mt-2 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="URL kopieren">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                <span id="copyButtonText">URL kopieren</span>
+              </button>
+            </div>
+
+            <h3 class="mt-6 font-semibold">Kalender-Integration</h3>
+            <p class="text-sm mb-4">Diese URL funktioniert mit allen Kalendern, die iCal-URLs unterstützen, wie z.B.:</p>
+            <ul class="list-disc pl-6 space-y-2 text-sm">
+              <li>Google Calendar</li>
+              <li>Apple Calendar</li>
+              <li>Microsoft Outlook</li>
+              <li>Thunderbird</li>
+              <li>und viele mehr...</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- Anleitung -->
+      <section class="mx-auto max-w-3xl px-6 mt-8">
+        <div class="rounded-3xl border border-indigo-100 dark:border-indigo-900/40 bg-white/70 dark:bg-gray-900/60 backdrop-blur shadow-xl p-8">
+          <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/></svg>
+            Wie finde ich meine Daten?
+          </h2>
+          <ol class="list-decimal pl-6 space-y-4">
+            <li>Öffne <a href="https://selfservice.campus-dual.de/room" target="_blank" class="text-indigo-600 dark:text-indigo-400 hover:underline">selfservice.campus-dual.de/room</a></li>
+            <li>Öffne die Browser-Entwicklertools (F12 oder Rechtsklick → Untersuchen)</li>
+            <li>Gehe zum "Netzwerk" (Network) Tab</li>
+            <li>Lade die Seite neu</li>
+            <li>Suche nach einer Anfrage zu <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">room/json</code></li>
+            <li>In der URL dieser Anfrage findest du deine <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">userid</code> und deinen <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">hash</code></li>
+          </ol>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="mt-auto py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+    Made with ❤ by <a target="_blank" rel="noopener noreferrer" href="https://github.com/xNycrofox" class="underline hover:text-indigo-600">xNycrofox</a> · Source on GitHub · Not affiliated with DHSN / Campus Dual.
+  </footer>
+
+  <!-- Scripts --------------------------------------------------------------->
+  <script>
+  // Theme toggle
+  const html=document.documentElement,btn=document.getElementById('themeToggle'),icn=document.getElementById('themeIcon');
+  const setIcon=()=>icn.innerHTML=html.classList.contains('dark')?'<path d="M21.752 15.002A9.718 9.718 0 0 1 12 21.75 9.75 9.75 0 0 1 12 2.25a.75.75 0 0 1 .676 1.084A7.5 7.5 0 0 0 20.5 14.326a.75.75 0 0 1 1.252.676Z" />':'<path stroke-linecap="round" stroke-linejoin="round" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-7.364l-1.414 1.414M6.05 17.95l-1.414 1.414m0-12.728 1.414 1.414M17.95 17.95l1.414 1.414M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z" />';
+  btn.addEventListener('click',()=>{html.classList.toggle('dark');localStorage.theme=html.classList.contains('dark')?'dark':'light';setIcon()});
+  if(localStorage.theme==='dark'||(!('theme'in localStorage)&&matchMedia('(prefers-color-scheme:dark)').matches)){html.classList.add('dark');}
+  setIcon();
+
+  // Copy button
+  const copyButton = document.getElementById('copyButton');
+  const copyButtonText = document.getElementById('copyButtonText');
+  const copyIcon = copyButton.querySelector('svg');
+  copyButton.addEventListener('click', () => {
+    const url = document.querySelector('pre').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+      copyButtonText.textContent = 'URL kopiert';
+      copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />';
+      setTimeout(() => {
+        copyButtonText.textContent = 'URL kopieren';
+        copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>';
+      }, 2000);
+    });
+  });
+
+  // ICS export logic
+  const fmt=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
+  const toICS=e=>['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//campus-dual-ics//browser//EN','CALSCALE:GREGORIAN',...e.flatMap(v=>['BEGIN:VEVENT',`UID:${v.uid}`,`DTSTAMP:${fmt(new Date())}`,`DTSTART:${fmt(v.start)}`,`DTEND:${fmt(v.end)}`,`SUMMARY:${v.title.replace(/,/g,'\\,')}`,v.location?`LOCATION:${v.location.replace(/,/g,'\\,')}`:'',v.description?`DESCRIPTION:${v.description.replace(/,/g,'\\,')}`:'','END:VEVENT']),'END:VCALENDAR'].join('\r\n');
+  document.getElementById('form').addEventListener('submit',async ev=>{
+    ev.preventDefault();
+    const uid=document.getElementById('userid').value.trim();
+    const hash=document.getElementById('hash').value.trim();
+    const err=document.getElementById('error'),res=document.getElementById('result');
+    err.classList.add('hidden');res.classList.add('hidden');
+    try{
+      const now=Math.floor(Date.now()/1000);
+      const api=`https://selfservice.campus-dual.de/room/json?userid=${uid}&hash=${hash}&start=${now-2592000}&end=${now+31536000}`;
+      let r;
+      try {
+        r = await fetch(api);
+      } catch (_) {
+        r = await fetch(`https://corsproxy.io/?${encodeURIComponent(api)}`);
+      }
+      if(!r.ok) throw new Error('HTTP '+r.status+' – '+r.statusText);
+      const rows=await r.json();
+      const events=rows.map((r,i)=>({uid:`${uid}-${r.id||i}@campus`,start:new Date(r.start*1000),end:new Date(r.end*1000),title:r.text||r.title||'Unterricht',location:r.room||'',description:[r.course||'',r.teacher||''].filter(Boolean).join(' – ')}));
+      const blob=new Blob([toICS(events)],{type:'text/calendar'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`campus-${uid}.ics`;a.click();res.classList.remove('hidden');
+    }catch(e){err.textContent='Fehler: '+e.message;err.classList.remove('hidden');}
+  });
+  </script>
+</body>
+</html>
