@@ -147,18 +147,10 @@
     const err=document.getElementById('error'),res=document.getElementById('result');
     err.classList.add('hidden');res.classList.add('hidden');
     try{
-      const now=Math.floor(Date.now()/1000);
-      const api=`https://selfservice.campus-dual.de/room/json?userid=${uid}&hash=${hash}&start=${now-2592000}&end=${now+31536000}`;
-      let r;
-      try {
-        r = await fetch(api);
-      } catch (_) {
-        r = await fetch(`https://corsproxy.io/?${encodeURIComponent(api)}`);
-      }
+      const r = await fetch(`https://cdual-ics.xnycrofox.workers.dev/ical?u=${uid}&h=${hash}`);
       if(!r.ok) throw new Error('HTTP '+r.status+' – '+r.statusText);
-      const rows=await r.json();
-      const events=rows.map((r,i)=>({uid:`${uid}-${r.id||i}@campus`,start:new Date(r.start*1000),end:new Date(r.end*1000),title:r.text||r.title||'Unterricht',location:r.room||'',description:[r.course||'',r.teacher||''].filter(Boolean).join(' – ')}));
-      const blob=new Blob([toICS(events)],{type:'text/calendar'});
+      const ics = await r.text();
+      const blob=new Blob([ics],{type:'text/calendar'});
       const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`campus-${uid}.ics`;a.click();res.classList.remove('hidden');
     }catch(e){err.textContent='Fehler: '+e.message;err.classList.remove('hidden');}
   });
