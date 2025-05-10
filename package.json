@@ -1,0 +1,15 @@
+{
+  "name": "campus-dual-calendar-tool",
+  "version": "1.0.0",
+  "description": "Export Campus Dual schedule to iCal format",
+  "main": "worker.js",
+  "scripts": {
+    "deploy": "wrangler publish",
+    "dev": "wrangler dev"
+  },
+  "author": "xNycrofox",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+} 
