@@ -2,7 +2,6 @@
 
 Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal-Format exportiert. Perfekt für Studenten, die ihren Stundenplan in ihren bevorzugten Kalender integrieren möchten.
 
-> 🎓 Exportiere deinen Campus Dual Stundenplan als iCal-Datei oder abonniere ihn direkt in deinem Kalender. Einfach, schnell und ohne Installation.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-000000?style=flat&logo=github&logoColor=white)](https://xnycrofox.github.io/campus-dual-calendar-tool/)
 [![Deploy to Cloudflare Workers](https://img.shields.io/badge/Deploy%20to%20Cloudflare%20Workers-F38020?style=flat&logo=cloudflare&logoColor=white)](https://deploy.workers.cloudflare.com/?url=https://github.com/xNycrofox/campus-dual-calendar-tool)
