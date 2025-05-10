@@ -32,7 +32,7 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
   - GitHub Pages für das Frontend
   - Cloudflare Workers für die API
 
-# Nutzung
+## Nutzung
 
 **Parameter:**
 - `u`: Matrikelnummer (userid)
