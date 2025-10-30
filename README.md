@@ -63,9 +63,3 @@ Beiträge sind willkommen! Bitte folge diesen Schritten:
 ## 📄 Lizenz
 
 Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe die [LICENSE](LICENSE) Datei für Details.
-
-## 🙏 Danksagung
-
-- [Campus Dual](https://www.campus-dual.de) für die Bereitstellung der API
-- [Cloudflare](https://www.cloudflare.com) für die Workers-Plattform
-- [TailwindCSS](https://tailwindcss.com) für das wundervolle CSS-Framework
