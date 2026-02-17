@@ -1,22 +1,28 @@
 /* eslint-disable no-control-regex */
 const { request, Agent } = require("undici");
 
+// ---------------- CONFIG ----------------
 const ALLOWED_ORIGINS = new Set([
   "https://xnycrofox.github.io",
   "https://campus-dual-calendar-tool.vercel.app",
 ]);
+
+// Kalender-Clients (User-Agent Heuristik, nicht “Security”)
 const ALLOWED_AGENTS =
   /Google-Calendar|Microsoft|Outlook|Apple-PubSub|iOS|Mac OS X|Android|Thunderbird|Java\/|Feed|vCalendar|iCal/i;
 
 const CAMPUS_BASE = "https://selfservice.campus-dual.de";
 const UPSTREAM_PATH = "/room/json";
 
+// transient edge/origin issues
 const RETRY_STATUSES = new Set([520, 522, 523, 524, 526]);
 
+// ---------------- HELPERS ----------------
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// CORS nur für Browser relevant
 function buildCorsHeaders(req) {
   const origin = req.headers.origin || "";
 
@@ -29,11 +35,11 @@ function buildCorsHeaders(req) {
     "Access-Control-Allow-Origin": allowed,
     "Vary": "Origin",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": req.headers["access-control-request-headers"] || "Content-Type",
+    "Access-Control-Allow-Headers":
+      req.headers["access-control-request-headers"] || "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
 }
-
 
 function gatekeeper(req) {
   const origin = (req.headers.origin || req.headers.referer || "").toLowerCase();
@@ -48,69 +54,6 @@ function gatekeeper(req) {
 
   return { isMyWebsite, isCalendarClient, uaRaw };
 }
-
-// ---------- Upstream via undici (mit Agent) ----------
-
-// Wichtig: allowH2:false behebt oft "fetch failed" bei Cloudflare/WAF/Origin-Ketten
-const upstreamDispatcher = new Agent({
-  connect: {
-    // Wenn du TLS NICHT aufweichen willst: auf true stellen
-    rejectUnauthorized: false,
-
-    // SNI explizit (hilft bei manchen TLS-Setups)
-    servername: "selfservice.campus-dual.de",
-  },
-  allowH2: false,
-  // keepAlive / pipelining kann man auch konservativ halten:
-  pipelining: 0,
-});
-
-async function undiciGet(url, headers) {
-  const res = await request(url, {
-    method: "GET",
-    headers,
-    dispatcher: upstreamDispatcher,
-    maxRedirections: 0,
-  });
-
-  // res.body ist ein stream; wir lesen als Buffer
-  const chunks = [];
-  for await (const chunk of res.body) chunks.push(chunk);
-  const buf = Buffer.concat(chunks);
-
-  return {
-    status: res.statusCode,
-    headers: res.headers,
-    ok: res.statusCode >= 200 && res.statusCode < 300,
-    buf,
-  };
-}
-
-async function fetchWithRetry(url, headers, tries = 3) {
-  let lastErr = null;
-
-  for (let i = 0; i < tries; i++) {
-    try {
-      const r = await undiciGet(url, headers);
-
-      if (r.ok) return r;
-
-      // Redirects oder non-transient: direkt zurück
-      if (r.status >= 300 && r.status < 400) return r;
-      if (!RETRY_STATUSES.has(r.status)) return r;
-
-      await sleep(150 * (i + 1));
-    } catch (err) {
-      lastErr = err;
-      await sleep(150 * (i + 1));
-    }
-  }
-
-  if (lastErr) throw lastErr;
-  return undiciGet(url, headers);
-}
-
-// ---------- Parsing / ICS Helpers ----------
 
 async function dumpUpstream(r, requestedUrl) {
   const bodyPreview = r?.buf ? r.buf.toString("utf8").slice(0, 800) : "<no body>";
@@ -129,6 +72,7 @@ function parseJsonRobustFromBuf(buf) {
   return JSON.parse(buf.toString("latin1"));
 }
 
+// Mojibake-Fix: "HÃ¤nel" -> "Hänel"
 function fixMojibake(s) {
   if (s == null) return s;
   const str = String(s);
@@ -140,6 +84,7 @@ function fixMojibake(s) {
   }
 }
 
+// RFC5545 escaping
 function icsEscape(s) {
   return String(s)
     .replace(/\\/g, "\\\\")
@@ -148,23 +93,44 @@ function icsEscape(s) {
     .replace(/\r?\n/g, "\\n");
 }
 
-function fmtLocal(dt) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    dt.getFullYear() +
-    pad(dt.getMonth() + 1) +
-    pad(dt.getDate()) +
-    "T" +
-    pad(dt.getHours()) +
-    pad(dt.getMinutes()) +
-    pad(dt.getSeconds())
-  );
-}
-
+// UTC timestamp for DTSTAMP
 function fmtUtc(dt) {
   return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
+/**
+ * WICHTIG: Date -> "YYYYMMDDTHHMMSS" in einer spezifischen Zeitzone (DST-safe)
+ * Damit ist es egal, in welcher Zeitzone Vercel läuft.
+ */
+function fmtInTimeZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+
+  return (
+    get("year") +
+    get("month") +
+    get("day") +
+    "T" +
+    get("hour") +
+    get("minute") +
+    get("second")
+  );
+}
+
+/**
+ * Zeilenfaltung nach RFC (max 75 OCTETS pro Zeile).
+ * Wichtig: an UTF-8-Grenzen sauber splitten (keine kaputten Umlaut-Bytes).
+ */
 function foldIcs(icsText) {
   const lines = icsText.split("\r\n");
   const out = [];
@@ -174,18 +140,33 @@ function foldIcs(icsText) {
       out.push(line);
       continue;
     }
-    const bytes = Buffer.from(line, "utf8");
-    let start = 0;
+
+    let rest = line;
     let first = true;
 
-    while (start < bytes.length) {
-      const chunk = bytes.slice(start, start + 75);
-      const str = chunk.toString("utf8");
-      out.push((first ? "" : " ") + str);
+    while (Buffer.byteLength(rest, "utf8") > 75) {
+      // bestes Split-Index finden, sodass slice(0, idx) <= 75 bytes
+      let idx = 1;
+      let best = 1;
+
+      // line-length ist klein genug, brute-force ist ok
+      while (idx <= rest.length) {
+        const part = rest.slice(0, idx);
+        if (Buffer.byteLength(part, "utf8") <= 75) best = idx;
+        else break;
+        idx++;
+      }
+
+      const head = rest.slice(0, best);
+      out.push((first ? "" : " ") + head);
+
+      rest = rest.slice(best);
       first = false;
-      start += 75;
     }
+
+    out.push((first ? "" : " ") + rest);
   }
+
   return out.join("\r\n");
 }
 
@@ -218,15 +199,71 @@ function vTimezoneEuropeBerlin() {
   ];
 }
 
-// ---- Handler ----
+// ---------------- UPSTREAM (undici) ----------------
+// Hinweis: rejectUnauthorized:false ist “unsicher”, aber behebt oft TLS-Probleme bei kaputten Chains.
+// Wenn es ohne geht: unbedingt auf true stellen!
+const upstreamDispatcher = new Agent({
+  connect: {
+    rejectUnauthorized: false,
+    servername: "selfservice.campus-dual.de",
+  },
+  allowH2: false,
+  pipelining: 0,
+});
+
+async function undiciGet(url, headers) {
+  const res = await request(url, {
+    method: "GET",
+    headers,
+    dispatcher: upstreamDispatcher,
+    maxRedirections: 0,
+  });
+
+  const chunks = [];
+  for await (const chunk of res.body) chunks.push(chunk);
+  const buf = Buffer.concat(chunks);
+
+  return {
+    status: res.statusCode,
+    headers: res.headers,
+    ok: res.statusCode >= 200 && res.statusCode < 300,
+    buf,
+  };
+}
+
+async function fetchWithRetry(url, headers, tries = 3) {
+  let lastErr = null;
+
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await undiciGet(url, headers);
+
+      if (r.ok) return r;
+      if (r.status >= 300 && r.status < 400) return r; // redirect -> return
+      if (!RETRY_STATUSES.has(r.status)) return r;      // not transient -> return
+
+      await sleep(150 * (i + 1));
+    } catch (err) {
+      lastErr = err;
+      await sleep(150 * (i + 1));
+    }
+  }
+
+  if (lastErr) throw lastErr;
+  return undiciGet(url, headers);
+}
+
+// ---------------- VERCEL HANDLER ----------------
 module.exports = async (req, res) => {
   const corsHeaders = buildCorsHeaders(req);
 
+  // Preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, corsHeaders);
     return res.end();
   }
 
+  // Only GET
   if (req.method !== "GET") {
     res.writeHead(405, { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" });
     return res.end("Method Not Allowed");
@@ -237,6 +274,7 @@ module.exports = async (req, res) => {
   const hash = req.query.h;
   const months = Number(req.query.m || 3);
 
+  // Gatekeeper
   const gate = gatekeeper(req);
   if (!gate.isMyWebsite && !gate.isCalendarClient) {
     res.writeHead(403, { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" });
@@ -250,6 +288,7 @@ module.exports = async (req, res) => {
     return res.end("Fehler: userid (u) und hash (h) fehlen.");
   }
 
+  // Zeitfenster
   const now = Math.floor(Date.now() / 1000);
   const start = now - 60 * 60 * 24 * 14;
   const end = now + 60 * 60 * 24 * 30 * (Number.isFinite(months) ? months : 3);
@@ -260,39 +299,50 @@ module.exports = async (req, res) => {
     `&hash=${encodeURIComponent(hash)}` +
     `&start=${start}&end=${end}&_=${Date.now()}`;
 
+  // Upstream fetch
   let upstream;
   try {
-    upstream = await fetchWithRetry(requestedUrl, {
-      "Accept": "application/json, text/plain, */*",
-      "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
-      "User-Agent": "Mozilla/5.0 (CampusDualICS/1.0; Vercel)",
-      "Referer": `${CAMPUS_BASE}/`,
-      "Origin": CAMPUS_BASE,
-      "X-Requested-With": "XMLHttpRequest",
-    }, 3);
+    upstream = await fetchWithRetry(
+      requestedUrl,
+      {
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+        "User-Agent": "Mozilla/5.0 (CampusDualICS/1.0; Vercel)",
+        "Referer": `${CAMPUS_BASE}/`,
+        "Origin": CAMPUS_BASE,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      3
+    );
   } catch (err) {
-    // 🔥 wichtig: cause/code anzeigen (damit wir wissen ob TLS, ECONNRESET, ENOTFOUND, etc.)
     const details = {
       message: err?.message,
       name: err?.name,
       code: err?.code,
       errno: err?.errno,
       syscall: err?.syscall,
-      cause: err?.cause ? {
-        message: err.cause.message,
-        name: err.cause.name,
-        code: err.cause.code,
-      } : undefined,
+      cause: err?.cause
+        ? { message: err.cause.message, name: err.cause.name, code: err.cause.code }
+        : undefined,
       stack: debug ? err?.stack : undefined,
       requested_url: requestedUrl,
     };
 
-    res.writeHead(502, { ...corsHeaders, "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8" });
-    return res.end(debug ? JSON.stringify(details, null, 2) : `Fehler: Upstream-Fetch fehlgeschlagen: ${err.message}`);
+    res.writeHead(502, {
+      ...corsHeaders,
+      "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8",
+    });
+    return res.end(
+      debug ? JSON.stringify(details, null, 2) : `Fehler: Upstream-Fetch fehlgeschlagen: ${err.message}`
+    );
   }
 
+  // Redirect = Login / WAF / irgendwas
   if (upstream.status >= 300 && upstream.status < 400) {
-    res.writeHead(503, { ...corsHeaders, "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8" });
+    res.writeHead(503, {
+      ...corsHeaders,
+      "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8",
+    });
     return res.end(
       debug
         ? JSON.stringify(await dumpUpstream(upstream, requestedUrl), null, 2)
@@ -301,7 +351,10 @@ module.exports = async (req, res) => {
   }
 
   if (!upstream.ok) {
-    res.writeHead(503, { ...corsHeaders, "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8" });
+    res.writeHead(503, {
+      ...corsHeaders,
+      "Content-Type": debug ? "application/json" : "text/plain; charset=utf-8",
+    });
     return res.end(
       debug
         ? JSON.stringify(await dumpUpstream(upstream, requestedUrl), null, 2)
@@ -309,6 +362,7 @@ module.exports = async (req, res) => {
     );
   }
 
+  // JSON parse
   let rows;
   try {
     rows = parseJsonRobustFromBuf(upstream.buf);
@@ -322,7 +376,10 @@ module.exports = async (req, res) => {
     return res.end("Fehler: Formatfehler – kein Array empfangen.");
   }
 
+  // ---------------- ICS BUILD (DST korrekt) ----------------
   const nowUtc = fmtUtc(new Date());
+  const tz = "Europe/Berlin";
+
   const calLines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -348,6 +405,7 @@ module.exports = async (req, res) => {
     const dtStart = new Date(row.start * 1000);
     const dtEnd = new Date(row.end * 1000);
 
+    // Beschreibung
     const descParts = [];
     if (description && description !== title) descParts.push(description);
     if (instructor && instructor.trim()) descParts.push(`Dozent: ${instructor}`);
@@ -357,8 +415,11 @@ module.exports = async (req, res) => {
     calLines.push("BEGIN:VEVENT");
     calLines.push(`UID:${makeUid(uid, row)}`);
     calLines.push(`DTSTAMP:${nowUtc}`);
-    calLines.push(`DTSTART;TZID=Europe/Berlin:${fmtLocal(dtStart)}`);
-    calLines.push(`DTEND;TZID=Europe/Berlin:${fmtLocal(dtEnd)}`);
+
+    // >>> DAS ist der Fix: TZ-sicher formatieren (Sommer/Winterzeit korrekt)
+    calLines.push(`DTSTART;TZID=${tz}:${fmtInTimeZone(dtStart, tz)}`);
+    calLines.push(`DTEND;TZID=${tz}:${fmtInTimeZone(dtEnd, tz)}`);
+
     calLines.push(`SUMMARY:${icsEscape(title)}`);
     calLines.push("STATUS:CONFIRMED");
     calLines.push("SEQUENCE:0");
@@ -373,6 +434,7 @@ module.exports = async (req, res) => {
 
   const ics = foldIcs(calLines.join("\r\n"));
 
+  // Response
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/calendar; charset=utf-8");
   res.setHeader("Content-Disposition", 'inline; filename="campus-dual.ics"');
