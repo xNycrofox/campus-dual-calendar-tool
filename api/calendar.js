@@ -7,9 +7,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://campus-dual-calendar-tool.vercel.app",
 ]);
 
-// Kalender-Clients (User-Agent Heuristik, nicht “Security”)
-const ALLOWED_AGENTS =
-  /Google-Calendar|Microsoft|Outlook|Apple-PubSub|iOS|Mac OS X|Android|Thunderbird|Java\/|Feed|vCalendar|iCal/i;
 
 const CAMPUS_BASE = "https://selfservice.campus-dual.de";
 const UPSTREAM_PATH = "/room/json";
@@ -41,19 +38,6 @@ function buildCorsHeaders(req) {
   };
 }
 
-function gatekeeper(req) {
-  const origin = (req.headers.origin || req.headers.referer || "").toLowerCase();
-  const uaRaw = req.headers["user-agent"] || "";
-
-  const isMyWebsite =
-    origin.includes("xnycrofox.github.io") ||
-    origin.includes("campus-dual-calendar-tool.vercel.app") ||
-    origin.includes("localhost");
-
-  const isCalendarClient = ALLOWED_AGENTS.test(uaRaw);
-
-  return { isMyWebsite, isCalendarClient, uaRaw };
-}
 
 async function dumpUpstream(r, requestedUrl) {
   const bodyPreview = r?.buf ? r.buf.toString("utf8").slice(0, 800) : "<no body>";
@@ -274,14 +258,6 @@ module.exports = async (req, res) => {
   const hash = req.query.h;
   const months = Number(req.query.m || 3);
 
-  // Gatekeeper
-  const gate = gatekeeper(req);
-  if (!gate.isMyWebsite && !gate.isCalendarClient) {
-    res.writeHead(403, { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" });
-    return res.end(
-      `Zugriff verweigert.\nDieser Feed ist nur über deine Webseite oder Kalender-Apps gedacht.\n\nUser-Agent: ${gate.uaRaw}`
-    );
-  }
 
   if (!uid || !hash) {
     res.writeHead(400, { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" });
