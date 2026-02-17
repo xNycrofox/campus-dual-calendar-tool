@@ -31,7 +31,7 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
   - iCal-Format für universelle Kalenderkompatibilität
 - **Deployment**:
   - GitHub Pages für das Frontend
-  - Cloudflare Workers für die API
+  - Vercel Workers für die API
 
 ## Nutzung
 
