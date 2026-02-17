@@ -11,7 +11,6 @@ const ALLOWED_ORIGINS = new Set([
 const CAMPUS_BASE = "https://selfservice.campus-dual.de";
 const UPSTREAM_PATH = "/room/json";
 
-// transient edge/origin issues
 const RETRY_STATUSES = new Set([520, 522, 523, 524, 526]);
 
 // ---------------- HELPERS ----------------
@@ -19,7 +18,6 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// CORS nur für Browser relevant
 function buildCorsHeaders(req) {
   const origin = req.headers.origin || "";
 
@@ -56,7 +54,6 @@ function parseJsonRobustFromBuf(buf) {
   return JSON.parse(buf.toString("latin1"));
 }
 
-// Mojibake-Fix: "HÃ¤nel" -> "Hänel"
 function fixMojibake(s) {
   if (s == null) return s;
   const str = String(s);
@@ -68,7 +65,6 @@ function fixMojibake(s) {
   }
 }
 
-// RFC5545 escaping
 function icsEscape(s) {
   return String(s)
     .replace(/\\/g, "\\\\")
@@ -77,15 +73,10 @@ function icsEscape(s) {
     .replace(/\r?\n/g, "\\n");
 }
 
-// UTC timestamp for DTSTAMP
 function fmtUtc(dt) {
   return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-/**
- * WICHTIG: Date -> "YYYYMMDDTHHMMSS" in einer spezifischen Zeitzone (DST-safe)
- * Damit ist es egal, in welcher Zeitzone Vercel läuft.
- */
 function fmtInTimeZone(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone,
@@ -111,10 +102,6 @@ function fmtInTimeZone(date, timeZone) {
   );
 }
 
-/**
- * Zeilenfaltung nach RFC (max 75 OCTETS pro Zeile).
- * Wichtig: an UTF-8-Grenzen sauber splitten (keine kaputten Umlaut-Bytes).
- */
 function foldIcs(icsText) {
   const lines = icsText.split("\r\n");
   const out = [];
@@ -129,11 +116,9 @@ function foldIcs(icsText) {
     let first = true;
 
     while (Buffer.byteLength(rest, "utf8") > 75) {
-      // bestes Split-Index finden, sodass slice(0, idx) <= 75 bytes
       let idx = 1;
       let best = 1;
 
-      // line-length ist klein genug, brute-force ist ok
       while (idx <= rest.length) {
         const part = rest.slice(0, idx);
         if (Buffer.byteLength(part, "utf8") <= 75) best = idx;
@@ -183,9 +168,6 @@ function vTimezoneEuropeBerlin() {
   ];
 }
 
-// ---------------- UPSTREAM (undici) ----------------
-// Hinweis: rejectUnauthorized:false ist “unsicher”, aber behebt oft TLS-Probleme bei kaputten Chains.
-// Wenn es ohne geht: unbedingt auf true stellen!
 const upstreamDispatcher = new Agent({
   connect: {
     rejectUnauthorized: false,
@@ -223,8 +205,8 @@ async function fetchWithRetry(url, headers, tries = 3) {
       const r = await undiciGet(url, headers);
 
       if (r.ok) return r;
-      if (r.status >= 300 && r.status < 400) return r; // redirect -> return
-      if (!RETRY_STATUSES.has(r.status)) return r;      // not transient -> return
+      if (r.status >= 300 && r.status < 400) return r; 
+      if (!RETRY_STATUSES.has(r.status)) return r;   
 
       await sleep(150 * (i + 1));
     } catch (err) {
@@ -264,7 +246,6 @@ module.exports = async (req, res) => {
     return res.end("Fehler: userid (u) und hash (h) fehlen.");
   }
 
-  // Zeitfenster
   const now = Math.floor(Date.now() / 1000);
   const start = now - 60 * 60 * 24 * 14;
   const end = now + 60 * 60 * 24 * 30 * (Number.isFinite(months) ? months : 3);
@@ -313,7 +294,6 @@ module.exports = async (req, res) => {
     );
   }
 
-  // Redirect = Login / WAF / irgendwas
   if (upstream.status >= 300 && upstream.status < 400) {
     res.writeHead(503, {
       ...corsHeaders,
@@ -352,7 +332,7 @@ module.exports = async (req, res) => {
     return res.end("Fehler: Formatfehler – kein Array empfangen.");
   }
 
-  // ---------------- ICS BUILD (DST korrekt) ----------------
+  // ---------------- ICS BUILD ----------------
   const nowUtc = fmtUtc(new Date());
   const tz = "Europe/Berlin";
 
@@ -381,7 +361,6 @@ module.exports = async (req, res) => {
     const dtStart = new Date(row.start * 1000);
     const dtEnd = new Date(row.end * 1000);
 
-    // Beschreibung
     const descParts = [];
     if (description && description !== title) descParts.push(description);
     if (instructor && instructor.trim()) descParts.push(`Dozent: ${instructor}`);
@@ -392,7 +371,6 @@ module.exports = async (req, res) => {
     calLines.push(`UID:${makeUid(uid, row)}`);
     calLines.push(`DTSTAMP:${nowUtc}`);
 
-    // >>> DAS ist der Fix: TZ-sicher formatieren (Sommer/Winterzeit korrekt)
     calLines.push(`DTSTART;TZID=${tz}:${fmtInTimeZone(dtStart, tz)}`);
     calLines.push(`DTEND;TZID=${tz}:${fmtInTimeZone(dtEnd, tz)}`);
 
