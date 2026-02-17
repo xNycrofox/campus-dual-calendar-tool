@@ -1,8 +1,9 @@
 {
-  "name": "campus-dual-calender-export-proxy",
+  "name": "campus-dual-calender-export",
   "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "node-fetch": "^3.3.2"
+  "private": true,
+  "description": "Campus Dual -> ICS Feed by xNycrofox",
+  "engines": {
+    "node": "20.x"
   }
 }

@@ -4,7 +4,6 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
 
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-000000?style=flat&logo=github&logoColor=white)](https://xnycrofox.github.io/campus-dual-calendar-tool/)
-[![Deploy to Cloudflare Workers](https://img.shields.io/badge/Deploy%20to%20Cloudflare%20Workers-F38020?style=flat&logo=cloudflare&logoColor=white)](https://deploy.workers.cloudflare.com/?url=https://github.com/xNycrofox/campus-dual-calendar-tool)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features
@@ -43,7 +42,7 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
 
 **Beispiel:**
 ```
-https://cdual-ics.xnycrofox.workers.dev/ical?u=3005182&h=12fca58f9d8f9f649269060c9aa51412&m=6
+https://campus-dual-calendar-tool.vercel.app/api/calendar?u=3005182&h=12fca58f9d8f9f649269060c9aa51412&m=6
 ```
 
 **Response:**
