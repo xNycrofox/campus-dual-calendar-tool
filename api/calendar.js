@@ -1,9 +1,10 @@
 /* eslint-disable no-control-regex */
 const { request, Agent } = require("undici");
 
-// --- KONFIG ---
-const ALLOWED_ORIGIN = "https://xnycrofox.github.io";
-
+const ALLOWED_ORIGINS = new Set([
+  "https://xnycrofox.github.io",
+  "https://campus-dual-calendar-tool.vercel.app",
+]);
 const ALLOWED_AGENTS =
   /Google-Calendar|Microsoft|Outlook|Apple-PubSub|iOS|Mac OS X|Android|Thunderbird|Java\/|Feed|vCalendar|iCal/i;
 
@@ -18,8 +19,11 @@ function sleep(ms) {
 
 function buildCorsHeaders(req) {
   const origin = req.headers.origin || "";
+
   const allowed =
-    origin === ALLOWED_ORIGIN || origin.includes("localhost") ? origin : ALLOWED_ORIGIN;
+    ALLOWED_ORIGINS.has(origin) || origin.includes("localhost")
+      ? origin
+      : "https://xnycrofox.github.io";
 
   return {
     "Access-Control-Allow-Origin": allowed,
@@ -30,12 +34,15 @@ function buildCorsHeaders(req) {
   };
 }
 
+
 function gatekeeper(req) {
   const origin = (req.headers.origin || req.headers.referer || "").toLowerCase();
   const uaRaw = req.headers["user-agent"] || "";
 
   const isMyWebsite =
-    origin.includes("xnycrofox.github.io") || origin.includes("localhost");
+    origin.includes("xnycrofox.github.io") ||
+    origin.includes("campus-dual-calendar-tool.vercel.app") ||
+    origin.includes("localhost");
 
   const isCalendarClient = ALLOWED_AGENTS.test(uaRaw);
 
