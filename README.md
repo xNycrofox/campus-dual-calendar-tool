@@ -27,7 +27,7 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
   - TailwindCSS für das UI
   - Inter Font für optimale Lesbarkeit
 - **Backend**:
-  - Cloudflare Workers für serverless API
+  - Vercel Workers für serverless API
   - iCal-Format für universelle Kalenderkompatibilität
 - **Deployment**:
   - GitHub Pages für das Frontend
@@ -45,9 +45,6 @@ Ein elegantes Tool, das den Stundenplan von Campus Dual in ein universelles iCal
 https://campus-dual-calendar-tool.vercel.app/api/calendar?u=3005182&h=12fca58f9d8f9f649269060c9aa51412&m=6
 ```
 
-**Response:**
-- Content-Type: `text/calendar`
-- Cache-Control: `public, max-age=900`
 
 ## 🤝 Contributing
 
