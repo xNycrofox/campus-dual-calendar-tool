@@ -332,6 +332,14 @@ module.exports = async (req, res) => {
     return res.end("Fehler: Formatfehler – kein Array empfangen.");
   }
 
+  if (rows.length === 0) {
+    // Wenn Campus Dual aufgrund von Wartungsarbeiten oder Datenbankfehlern ein 
+    // valides, aber leeres Array [] zurückgibt, senden wir einen HTTP 503 Fehler.
+    // Das verhindert, dass der Kalender ein leeres Update erhält und Termine löscht.
+    res.writeHead(503, { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Vorsichtsmaßnahme: Campus Dual liefert ein leeres Array (vermutlich Störung). Update abgebrochen, um Termine zu erhalten.");
+  }
+
   // ---------------- ICS BUILD ----------------
   const nowUtc = fmtUtc(new Date());
   const tz = "Europe/Berlin";
@@ -392,7 +400,16 @@ module.exports = async (req, res) => {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/calendar; charset=utf-8");
   res.setHeader("Content-Disposition", 'inline; filename="campus-dual.ics"');
-  res.setHeader("Cache-Control", "public, max-age=900, s-maxage=900");
+  
+  // Cache-Control mit stale-if-error (7 Tage):
+  // Das speichert OHNE Datenbank. Vercel's Serverless-System hält die Antwort kurzzeitig im CDN RAM.
+  // Wird ein Nutzer-URL (! getrennt für jeden Nutzer wg. Query-Parameter) abgefragt und 
+  // das Skript wirft 5xx (siehe oben), liefert Vercel automatisch den zuletzt gültigen Cache aus.
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=900, s-maxage=900, stale-while-revalidate=60, stale-if-error=604800"
+  );
+  
   for (const [k, v] of Object.entries(corsHeaders)) res.setHeader(k, v);
 
   return res.end(ics);
